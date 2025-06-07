@@ -9,10 +9,14 @@ from sklearn.metrics import silhouette_score
 st.set_page_config(page_title="CRM Audit", layout="wide")
 st.title("📊 CRM Data Audit & Customer Segmentation")
 
-# Load data
-df = pd.read_excel("data/Online Retail.xlsx")
-df['Total'] = df['Quantity'] * df['UnitPrice']
-df['InvoiceDate'] = pd.to_datetime(df['InvoiceDate'])
+@st.cache_data
+def load_data():
+    df = pd.read_excel("data/Online Retail.xlsx")
+    df['Total'] = df['Quantity'] * df['UnitPrice']
+    df['InvoiceDate'] = pd.to_datetime(df['InvoiceDate'])
+    return df
+
+df = load_data()
 
 # Clean data
 df_clean = df.dropna(subset=['CustomerID'])
@@ -22,33 +26,34 @@ df_clean['Total'] = df_clean['Quantity'] * df_clean['UnitPrice']
 df_clean['InvoiceDate'] = pd.to_datetime(df_clean['InvoiceDate'])
 df_clean['Month'] = df_clean['InvoiceDate'].dt.to_period("M")
 
-# RFM Calculation
-rfm = df_clean.groupby('CustomerID').agg({
-    'InvoiceDate': lambda x: (df_clean['InvoiceDate'].max() - x.max()).days,
-    'InvoiceNo': 'nunique',
-    'Total': 'sum'
-}).rename(columns={
-    'InvoiceDate': 'Recency',
-    'InvoiceNo': 'Frequency',
-    'Total': 'Monetary'
-})
+@st.cache_resource
+def compute_rfm_clusters(df_clean):
+    rfm = df_clean.groupby('CustomerID').agg({
+        'InvoiceDate': lambda x: (df_clean['InvoiceDate'].max() - x.max()).days,
+        'InvoiceNo': 'nunique',
+        'Total': 'sum'
+    }).rename(columns={
+        'InvoiceDate': 'Recency',
+        'InvoiceNo': 'Frequency',
+        'Total': 'Monetary'
+    })
 
-# Standardize
-scaler = StandardScaler()
-rfm_scaled = scaler.fit_transform(rfm)
+    scaler = StandardScaler()
+    rfm_scaled = scaler.fit_transform(rfm)
 
-# Fit final model
-kmeans = KMeans(n_clusters=4, random_state=42, n_init=10)
-rfm['Segment'] = kmeans.fit_predict(rfm_scaled)
+    kmeans = KMeans(n_clusters=4, random_state=42, n_init=10)
+    rfm['Segment'] = kmeans.fit_predict(rfm_scaled)
 
-# Label segments
-segment_labels = {
-    0: "At Risk",
-    1: "VIP",
-    2: "Inactive",
-    3: "Loyal"
-}
-rfm['SegmentLabel'] = rfm['Segment'].map(segment_labels)
+    segment_labels = {
+        0: "At Risk",
+        1: "VIP",
+        2: "Inactive",
+        3: "Loyal"
+    }
+    rfm['SegmentLabel'] = rfm['Segment'].map(segment_labels)
+    return rfm, rfm_scaled
+
+rfm, rfm_scaled = compute_rfm_clusters(df_clean)
 
 # Sidebar navigation
 tabs = st.sidebar.radio("📂 Select Page", ["Data Audit", "Segmentation", "Strategy"])
@@ -84,7 +89,6 @@ if tabs == "Data Audit":
 elif tabs == "Segmentation":
     st.subheader("📊 RFM Segmentation")
 
-    # Determine optimal k
     inertias = []
     silhouettes = []
     K = range(2, 6)
