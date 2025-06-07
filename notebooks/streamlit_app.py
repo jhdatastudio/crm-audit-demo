@@ -126,4 +126,8 @@ elif tabs == "Strategy":
         "Inactive": "Suppress or retarget with special offers."
     }
 
-    selected_segment = st.selectbox("Select a Segment", list(strategi
+    selected_segment = st.selectbox("Select a Segment", list(strategies.keys()))
+    st.markdown(f"**Segment:** {selected_segment}")
+    st.markdown(f"**Strategy:** {strategies[selected_segment]}")
+
+    st.bar_chart(rfm['SegmentLabel'].value_counts())
